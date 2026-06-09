@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Verify — RugShield</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600&display=swap" rel="stylesheet" />
+  <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #09090d;
+      --surface:    #111118;
+      --border:     #1f1f2e;
+      --accent:     #6c5ce7;
+      --accent-dim: #4a3fa0;
+      --gold:       #f0c94a;
+      --text:       #e8e6f0;
+      --muted:      #6b6880;
+      --success:    #00e99e;
+      --danger:     #ff4757;
+      --radius:     14px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Sora', sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    /* ── noise overlay ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-repeat: repeat;
+      background-size: 180px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── glowing orb ── */
+    body::after {
+      content: '';
+      position: fixed;
+      width: 480px; height: 480px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(108,92,231,0.18) 0%, transparent 70%);
+      top: -100px; right: -100px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative; z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 48px 40px;
+      width: 100%;
+      max-width: 440px;
+      margin: 24px;
+      box-shadow: 0 0 0 1px rgba(108,92,231,.08), 0 32px 64px rgba(0,0,0,.6);
+    }
+
+    /* ── shield logo ── */
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+    .logo svg { flex-shrink: 0; }
+    .logo-text {
+      font-family: 'Space Mono', monospace;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.04em;
+      color: var(--text);
+    }
+    .logo-text span { color: var(--accent); }
+
+    /* ── group badge ── */
+    .group-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(108,92,231,.12);
+      border: 1px solid rgba(108,92,231,.25);
+      border-radius: 999px;
+      padding: 4px 12px 4px 8px;
+      font-size: 13px;
+      color: #a99bf5;
+      margin-bottom: 20px;
+    }
+    .group-badge::before {
+      content: '🔒';
+      font-size: 12px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 14px;
+      margin-bottom: 32px;
+    }
+
+    /* ── step list ── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .step-num {
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Space Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 1px;
+    }
+    .step.done .step-num {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .step.done { color: var(--text); }
+
+    /* ── captcha wrapper ── */
+    .captcha-wrap {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 28px;
+      min-height: 78px;
+    }
+
+    /* ── verify button ── */
+    .btn {
+      width: 100%;
+      padding: 14px 24px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-family: 'Sora', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .18s, transform .1s, opacity .18s;
+      letter-spacing: 0.01em;
+    }
+    .btn:hover:not(:disabled) { background: #7d6eef; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── status messages ── */
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+      line-height: 1.5;
+    }
+    .status.info    { background: rgba(108,92,231,.1); border: 1px solid rgba(108,92,231,.3); color: #a99bf5; display: block; }
+    .status.success { background: rgba(0,233,158,.08); border: 1px solid rgba(0,233,158,.3); color: var(--success); display: block; }
+    .status.error   { background: rgba(255,71,87,.08);  border: 1px solid rgba(255,71,87,.3);  color: var(--danger);  display: block; }
+
+    /* ── success state ── */
+    .success-block {
+      display: none;
+      text-align: center;
+    }
+    .success-block .big-check {
+      font-size: 52px;
+      margin-bottom: 16px;
+      animation: pop .4s ease;
+    }
+    @keyframes pop {
+      0%   { transform: scale(0); }
+      70%  { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .success-block h2 { font-size: 22px; margin-bottom: 8px; }
+    .success-block p  { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .invite-box {
+      background: rgba(0,233,158,.06);
+      border: 1px solid rgba(0,233,158,.25);
+      border-radius: 10px;
+      padding: 16px;
+      word-break: break-all;
+      font-family: 'Space Mono', monospace;
+      font-size: 13px;
+      color: var(--success);
+      margin-bottom: 16px;
+    }
+    .btn-outline {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      border-radius: 10px;
+      font-family: 'Sora', sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+      text-decoration: none;
+      text-align: center;
+    }
+    .btn-outline:hover { background: rgba(108,92,231,.1); }
+
+    /* ── footer ── */
+    .footer {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .footer a { color: var(--muted); text-decoration: underline; }
+  </style>
+</head>
+
+<body>
+<div class="card" id="main-card">
+  <!-- Logo -->
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <path d="M14 2L4 6v8c0 5.5 4.3 10.7 10 12 5.7-1.3 10-6.5 10-12V6L14 2z"
+            fill="rgba(108,92,231,.2)" stroke="#6c5ce7" stroke-width="1.5" stroke-linejoin="round"/>
+      <path d="M9 14l3.5 3.5L19 11" stroke="#6c5ce7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="logo-text">Rug<span>Shield</span></span>
+  </div>
+
+  <!-- Group badge -->
+  <div class="group-badge" id="group-name">Private Group</div>
+
+  <h1>Human Verification</h1>
+  <p class="subtitle">Complete the check below to receive your one-time group invite link.</p>
+
+  <!-- Steps -->
+  <div class="steps">
+    <div class="step done" id="step1">
+      <div class="step-num">✓</div>
+      <span>Clicked the bot entry link</span>
+    </div>
+    <div class="step done" id="step2">
+      <div class="step-num">✓</div>
+      <span>Opened verification page</span>
+    </div>
+    <div class="step" id="step3">
+      <div class="step-num">3</div>
+      <span>Complete the captcha below</span>
+    </div>
+    <div class="step" id="step4">
+      <div class="step-num">4</div>
+      <span>Receive your group invite link</span>
+    </div>
+  </div>
+
+  <!-- hCaptcha -->
+  <div class="captcha-wrap">
+    <div class="h-captcha"
+         data-sitekey="YOUR_HCAPTCHA_SITE_KEY"
+         data-theme="dark"
+         data-callback="onCaptchaSuccess"
+         data-expired-callback="onCaptchaExpired">
+    </div>
+  </div>
+
+  <!-- Verify button -->
+  <button class="btn" id="verify-btn" disabled onclick="submitVerify()">
+    Verify &amp; Get Invite Link
+  </button>
+
+  <div class="status" id="status-msg"></div>
+
+  <div class="footer">
+    Powered by RugShield 🛡️ &nbsp;·&nbsp;
+    <a href="https://t.me/rugshieldbot" target="_blank">@rugshieldbot</a>
+  </div>
+</div>
+
+<!-- ── Success block (shown after verification) ── -->
+<div class="card success-block" id="success-card">
+  <div class="big-check">✅</div>
+  <h2>You're verified!</h2>
+  <p>Use the button below to join the group.<br>This link is <strong>one-time use only</strong>.</p>
+  <div class="invite-box" id="invite-link-display"></div>
+  <a class="btn-outline" id="join-btn" href="#" target="_blank">Join the Group →</a>
+  <div class="footer" style="margin-top:20px">Link expires in 10 minutes</div>
+</div>
+
+<script>
+  // ── Read URL params ──────────────────────────────────────────────────────
+  const params   = new URLSearchParams(location.search);
+  const TOKEN    = params.get('token')   || '';
+  const UID      = params.get('uid')     || '';
+  const CID      = params.get('cid')     || '';
+  const GROUP    = (params.get('group')  || 'Private Group').replace(/\+/g, ' ');
+
+  document.getElementById('group-name').textContent = '🔒 ' + GROUP;
+
+  // ── Replace with your actual backend verify endpoint ─────────────────────
+  // Option A (recommended): your backend server
+  // const VERIFY_ENDPOINT = 'https://your-backend.onrender.com/verify';
+  //
+  // Option B (zero backend): redirect back to bot with verified_ payload
+  // This makes the BOT generate the invite link instead.
+  const USE_BOT_REDIRECT = true;   // set false if you have a backend
+  const BOT_USERNAME     = 'rugshieldbot';
+
+  let captchaToken = null;
+
+  function onCaptchaSuccess(token) {
+    captchaToken = token;
+    document.getElementById('verify-btn').disabled = false;
+    document.getElementById('step3').classList.add('done');
+    document.getElementById('step3').querySelector('.step-num').textContent = '✓';
+  }
+
+  function onCaptchaExpired() {
+    captchaToken = null;
+    document.getElementById('verify-btn').disabled = true;
+  }
+
+  function setStatus(type, msg) {
+    const el = document.getElementById('status-msg');
+    el.className = 'status ' + type;
+    el.textContent = msg;
+  }
+
+  async function submitVerify() {
+    if (!captchaToken) return;
+
+    const btn = document.getElementById('verify-btn');
+    btn.disabled = true;
+    btn.textContent = 'Verifying…';
+    setStatus('info', 'Checking your verification…');
+
+    if (USE_BOT_REDIRECT) {
+      // ── Bot-redirect flow ──────────────────────────────────────────────
+      // We trust hCaptcha passed (server should also validate if you have backend).
+      // Redirect user back to bot with the token so bot sends the invite link.
+      const deepLink = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
+      setStatus('success', '✅ Captcha passed! Redirecting you back to the bot…');
+      setTimeout(() => {
+        window.location.href = deepLink;
+      }, 1200);
+      return;
+    }
+
+    // ── Backend API flow ───────────────────────────────────────────────────
+    try {
+      const res = await fetch(VERIFY_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token:         TOKEN,
+          user_id:       UID,
+          chat_id:       CID,
+          captcha_token: captchaToken,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      // ── Show success card ──────────────────────────────────────────────
+      document.getElementById('main-card').style.display  = 'none';
+      document.getElementById('success-card').style.display = 'block';
+      document.getElementById('invite-link-display').textContent = data.invite_link;
+      document.getElementById('join-btn').href = data.invite_link;
+
+    } catch (err) {
+      setStatus('error', '❌ ' + err.message + '. Please try again.');
+      btn.disabled = false;
+      btn.textContent = 'Verify & Get Invite Link';
+      if (window.hcaptcha) hcaptcha.reset();
+      captchaToken = null;
+    }
+  }
+</script>
+</body>
+</html>
