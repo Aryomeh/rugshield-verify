@@ -175,13 +175,16 @@
     </p>
 
     <div class="captcha-container">
-      <div class="h-captcha" data-sitekey="8b20346e-e99e-42ee-a494-204e690a1d1e" data-callback="onCaptchaSuccess"
-        data-expired-callback="onCaptchaExpired" data-error-callback="onCaptchaError">
+      <div class="h-captcha"
+        data-sitekey="8b20346e-e99e-42ee-a494-204e690a1d1e"
+        data-callback="onCaptchaSuccess"
+        data-expired-callback="onCaptchaExpired"
+        data-error-callback="onCaptchaError">
       </div>
     </div>
 
     <button class="btn" id="verify-btn" onclick="submitVerify()" disabled>
-      Verify & Return to Bot
+      Verify &amp; Return to Bot
     </button>
 
     <div class="status-msg" id="status-box"></div>
@@ -189,27 +192,40 @@
 
   <script>
     // ── CONFIGURATION ────────────────────────────────────────────────────────
-    // Change this to your Telegram Bot's exact Username without the '@'
     const BOT_USERNAME = "rugshieldbot";
 
-    // URL Query Parsing (?token=abc&group=XYZ...)
+    // ── BACKEND ENDPOINT (your Vercel serverless function) ───────────────────
+    // This must be a server-side route that calls hCaptcha's siteverify API
+    // using your HCAPTCHA_SECRET key — never expose that key here.
+    const VERIFY_API_ENDPOINT = "/api/verify";
+
+    // ── URL PARAMS ───────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const TOKEN = urlParams.get('token');
-    const UID = urlParams.get('uid');
-    const CID = urlParams.get('cid');
+    const UID   = urlParams.get('uid');
+    const CID   = urlParams.get('cid');
     const GROUP = urlParams.get('group');
 
-    // Runtime state holder for hCaptcha response
+    // ── RUNTIME STATE ────────────────────────────────────────────────────────
+    // Tracks whether the hCaptcha widget has produced a fresh, unexpired token.
+    // This is a UI convenience only — the real verification happens server-side.
     let captchaToken = null;
 
-    // Initialize UI Text elements from URL context
+    // ── HARD GUARD: abort immediately if required URL params are missing ──────
+    // This prevents someone from loading the page without a valid bot-issued link.
+    if (!TOKEN || !UID || !CID) {
+      document.getElementById('verify-btn').disabled = true;
+      setStatus('error', '❌ Invalid or missing session parameters. Use the link provided by the bot.');
+    }
+
+    // Populate group name from URL
     if (GROUP) {
       document.getElementById('group-name').textContent = decodeURIComponent(GROUP);
     }
 
     function setStatus(type, text) {
       const box = document.getElementById('status-box');
-      box.className = 'status-msg'; // clear old classes
+      box.className = 'status-msg';
       if (!type) {
         box.style.display = 'none';
         return;
@@ -218,12 +234,14 @@
       box.textContent = text;
     }
 
-    // ── HCAPTCHA CALLBACKS ──────────────────────────────────────────────────
+    // ── HCAPTCHA CALLBACKS ────────────────────────────────────────────────────
     function onCaptchaSuccess(token) {
       captchaToken = token;
-      // Enable the confirmation button once the captcha check passes
-      document.getElementById('verify-btn').disabled = false;
-      setStatus('info', '✅ Captcha cleared. Ready to return to bot!');
+      // Only enable the button if required params are also present
+      if (TOKEN && UID && CID) {
+        document.getElementById('verify-btn').disabled = false;
+        setStatus('info', '✅ Captcha cleared. Ready to return to bot!');
+      }
     }
 
     function onCaptchaExpired() {
@@ -236,31 +254,84 @@
       captchaToken = null;
       document.getElementById('verify-btn').disabled = true;
       setStatus('error', '⚠️ An error occurred during captcha rendering.');
-      console.error("hCaptcha Error Details:", err);
+      console.error("hCaptcha Error:", err);
     }
 
-    // ── SUBMIT & ROUTE ENTRY ────────────────────────────────────────────────
-    function submitVerify() {
-      if (!captchaToken) return;
-
-      const btn = document.getElementById('verify-btn');
-      btn.disabled = true;
-      btn.textContent = 'Redirecting...';
-
-      if (!TOKEN) {
-        setStatus('error', '❌ Error: Session token missing from link parameters.');
+    // ── SUBMIT ────────────────────────────────────────────────────────────────
+    async function submitVerify() {
+      // Client-side guards (defence-in-depth — real check is server-side)
+      if (!captchaToken) {
+        setStatus('error', '❌ Please complete the captcha first.');
+        return;
+      }
+      if (!TOKEN || !UID || !CID) {
+        setStatus('error', '❌ Session parameters missing. Use the link provided by the bot.');
         return;
       }
 
-      setStatus('success', '🎉 Verification Complete! Redirecting you back to Telegram...');
+      const btn = document.getElementById('verify-btn');
+      btn.disabled = true;
+      btn.textContent = 'Verifying…';
+      setStatus('info', '⏳ Checking your response…');
 
-      // Direct Deep-linking URL back to your bot router
-      const deepLink = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
+      try {
+        // ── SERVER-SIDE CAPTCHA VERIFICATION ─────────────────────────────────
+        // The server calls hCaptcha's siteverify API with the SECRET key and
+        // also validates that TOKEN/UID/CID are known and unused in your DB.
+        // The hCaptcha token is one-time-use and tied to the sitekey+secret pair,
+        // so it cannot be replayed or fabricated from the client side.
+        const res = await fetch(VERIFY_API_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            captcha_token: captchaToken,
+            token: TOKEN,
+            uid: UID,
+            cid: CID,
+          }),
+        });
 
-      // Drop back to the Telegram application safely after 1.2s
-      setTimeout(() => {
-        window.location.href = deepLink;
-      }, 1200);
+        // Guard against non-JSON or network-level error responses
+        let data;
+        try {
+          data = await res.json();
+        } catch {
+          throw new Error('Server returned an unreadable response.');
+        }
+
+        if (!res.ok || !data.ok) {
+          // Surface the server's own error reason if provided
+          const reason = data?.reason || 'Verification rejected by server.';
+          setStatus('error', `❌ ${reason}`);
+          btn.disabled = false;
+          btn.textContent = 'Verify & Return to Bot';
+          // Reset the captcha widget so the user must solve it again
+          if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
+          captchaToken = null;
+          return;
+        }
+
+        // ── SUCCESS: redirect back to bot ─────────────────────────────────────
+        // The server has already confirmed the captcha AND the session token.
+        // The bot's _start_router will call consume_verification_token() which
+        // performs its own DB-side expiry + one-time-use check before issuing
+        // an invite link — so even if this redirect were faked, the token
+        // would be rejected by the bot if it was never validated server-side.
+        setStatus('success', '🎉 Verified! Returning you to Telegram…');
+        btn.textContent = 'Redirecting…';
+
+        setTimeout(() => {
+          window.location.href = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
+        }, 1200);
+
+      } catch (err) {
+        console.error('Verify fetch failed:', err);
+        setStatus('error', '❌ Network error. Please check your connection and try again.');
+        btn.disabled = false;
+        btn.textContent = 'Verify & Return to Bot';
+        if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
+        captchaToken = null;
+      }
     }
   </script>
 </body>
