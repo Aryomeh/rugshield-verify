@@ -194,7 +194,7 @@
     // ── BACKEND ENDPOINT (your Vercel serverless function) ───────────────────
     // This must be a server-side route that calls hCaptcha's siteverify API
     // using your HCAPTCHA_SECRET key — never expose that key here.
-    const VERIFY_API_ENDPOINT = "http://16.16.182.103:8000/api/verify";
+    const VERIFY_API_ENDPOINT = "/api/verify";
 
     // ── URL PARAMS ───────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
