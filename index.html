@@ -175,11 +175,8 @@
     </p>
 
     <div class="captcha-container">
-      <div class="h-captcha"
-        data-sitekey="8b20346e-e99e-42ee-a494-204e690a1d1e"
-        data-callback="onCaptchaSuccess"
-        data-expired-callback="onCaptchaExpired"
-        data-error-callback="onCaptchaError">
+      <div class="h-captcha" data-sitekey="8b20346e-e99e-42ee-a494-204e690a1d1e" data-callback="onCaptchaSuccess"
+        data-expired-callback="onCaptchaExpired" data-error-callback="onCaptchaError">
       </div>
     </div>
 
@@ -197,13 +194,13 @@
     // ── BACKEND ENDPOINT (your Vercel serverless function) ───────────────────
     // This must be a server-side route that calls hCaptcha's siteverify API
     // using your HCAPTCHA_SECRET key — never expose that key here.
-    const VERIFY_API_ENDPOINT = "/api/verify";
+    const VERIFY_API_ENDPOINT = "http://16.16.182.103:8000/api/verify";
 
     // ── URL PARAMS ───────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const TOKEN = urlParams.get('token');
-    const UID   = urlParams.get('uid');
-    const CID   = urlParams.get('cid');
+    const UID = urlParams.get('uid');
+    const CID = urlParams.get('cid');
     const GROUP = urlParams.get('group');
 
     // ── RUNTIME STATE ────────────────────────────────────────────────────────
@@ -282,7 +279,7 @@
         // so it cannot be replayed or fabricated from the client side.
         const res = await fetch(VERIFY_API_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             captcha_token: captchaToken,
             token: TOKEN,
