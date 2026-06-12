@@ -10,6 +10,8 @@
     href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600&display=swap"
     rel="stylesheet" />
   <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+  <!-- ✅ CHANGE 1: Telegram Mini App SDK — must load before any tg.* calls -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
     *,
@@ -188,12 +190,16 @@
   </div>
 
   <script>
+    // ── TELEGRAM MINI APP INIT ────────────────────────────────────────────────
+    // Tell Telegram the Mini App is ready — must be called early
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand(); // expand to full height inside Telegram
+
     // ── CONFIGURATION ────────────────────────────────────────────────────────
     const BOT_USERNAME = "rugshieldbot";
 
-    // ── BACKEND ENDPOINT (your Vercel serverless function) ───────────────────
-    // This must be a server-side route that calls hCaptcha's siteverify API
-    // using your HCAPTCHA_SECRET key — never expose that key here.
+    // ── BACKEND ENDPOINT ─────────────────────────────────────────────────────
     const VERIFY_API_ENDPOINT = "/api/verify";
 
     // ── URL PARAMS ───────────────────────────────────────────────────────────
@@ -204,12 +210,9 @@
     const GROUP = urlParams.get('group');
 
     // ── RUNTIME STATE ────────────────────────────────────────────────────────
-    // Tracks whether the hCaptcha widget has produced a fresh, unexpired token.
-    // This is a UI convenience only — the real verification happens server-side.
     let captchaToken = null;
 
-    // ── HARD GUARD: abort immediately if required URL params are missing ──────
-    // This prevents someone from loading the page without a valid bot-issued link.
+    // ── HARD GUARD: abort if required URL params are missing ─────────────────
     if (!TOKEN || !UID || !CID) {
       document.getElementById('verify-btn').disabled = true;
       setStatus('error', '❌ Invalid or missing session parameters. Use the link provided by the bot.');
@@ -234,7 +237,6 @@
     // ── HCAPTCHA CALLBACKS ────────────────────────────────────────────────────
     function onCaptchaSuccess(token) {
       captchaToken = token;
-      // Only enable the button if required params are also present
       if (TOKEN && UID && CID) {
         document.getElementById('verify-btn').disabled = false;
         setStatus('info', '✅ Captcha cleared. Ready to return to bot!');
@@ -256,7 +258,6 @@
 
     // ── SUBMIT ────────────────────────────────────────────────────────────────
     async function submitVerify() {
-      // Client-side guards (defence-in-depth — real check is server-side)
       if (!captchaToken) {
         setStatus('error', '❌ Please complete the captcha first.');
         return;
@@ -272,11 +273,6 @@
       setStatus('info', '⏳ Checking your response…');
 
       try {
-        // ── SERVER-SIDE CAPTCHA VERIFICATION ─────────────────────────────────
-        // The server calls hCaptcha's siteverify API with the SECRET key and
-        // also validates that TOKEN/UID/CID are known and unused in your DB.
-        // The hCaptcha token is one-time-use and tied to the sitekey+secret pair,
-        // so it cannot be replayed or fabricated from the client side.
         const res = await fetch(VERIFY_API_ENDPOINT, {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
@@ -285,10 +281,12 @@
             token: TOKEN,
             uid: UID,
             cid: CID,
+            // ✅ CHANGE 2: send Telegram's signed initData so the server can
+            // verify this request genuinely came from a real Telegram user
+            init_data: tg.initData,
           }),
         });
 
-        // Guard against non-JSON or network-level error responses
         let data;
         try {
           data = await res.json();
@@ -297,28 +295,28 @@
         }
 
         if (!res.ok || !data.ok) {
-          // Surface the server's own error reason if provided
           const reason = data?.reason || 'Verification rejected by server.';
           setStatus('error', `❌ ${reason}`);
           btn.disabled = false;
           btn.textContent = 'Verify & Return to Bot';
-          // Reset the captcha widget so the user must solve it again
           if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
           captchaToken = null;
           return;
         }
 
-        // ── SUCCESS: redirect back to bot ─────────────────────────────────────
-        // The server has already confirmed the captcha AND the session token.
-        // The bot's _start_router will call consume_verification_token() which
-        // performs its own DB-side expiry + one-time-use check before issuing
-        // an invite link — so even if this redirect were faked, the token
-        // would be rejected by the bot if it was never validated server-side.
+        // ── SUCCESS ───────────────────────────────────────────────────────────
         setStatus('success', '🎉 Verified! Returning you to Telegram…');
         btn.textContent = 'Redirecting…';
 
         setTimeout(() => {
-          window.location.href = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
+          // ✅ CHANGE 3: instead of redirecting to a bot deep-link URL,
+          // sendData() fires directly inside Telegram, closes the Mini App,
+          // and triggers handle_webapp_data() in the bot instantly.
+          tg.sendData(JSON.stringify({
+            verified: true,
+            uid: UID,
+            cid: CID,
+          }));
         }, 1200);
 
       } catch (err) {
