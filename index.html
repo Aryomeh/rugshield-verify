@@ -309,14 +309,20 @@
         btn.textContent = 'Redirecting…';
 
         setTimeout(() => {
-          // ✅ CHANGE 3: instead of redirecting to a bot deep-link URL,
-          // sendData() fires directly inside Telegram, closes the Mini App,
-          // and triggers handle_webapp_data() in the bot instantly.
-          tg.sendData(JSON.stringify({
-            verified: true,
-            uid: UID,
-            cid: CID,
-          }));
+          try {
+            console.log("initData:", tg.initData);
+            console.log("Attempting sendData...");
+            tg.sendData(JSON.stringify({
+              verified: true,
+              uid: UID,
+              cid: CID,
+            }));
+            console.log("sendData called successfully");
+          } catch (e) {
+            console.error("sendData failed:", e);
+            // Fallback to old method if sendData fails
+            window.location.href = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
+          }
         }, 1200);
 
       } catch (err) {
