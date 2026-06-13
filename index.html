@@ -10,7 +10,6 @@
     href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600&display=swap"
     rel="stylesheet" />
   <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
-  <!-- ✅ CHANGE 1: Telegram Mini App SDK — must load before any tg.* calls -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
   <style>
@@ -191,34 +190,29 @@
 
   <script>
     // ── TELEGRAM MINI APP INIT ────────────────────────────────────────────────
-    // Tell Telegram the Mini App is ready — must be called early
     const tg = window.Telegram.WebApp;
     tg.ready();
-    tg.expand(); // expand to full height inside Telegram
+    tg.expand();
 
     // ── CONFIGURATION ────────────────────────────────────────────────────────
-    const BOT_USERNAME = "rugshieldbot";
-
-    // ── BACKEND ENDPOINT ─────────────────────────────────────────────────────
     const VERIFY_API_ENDPOINT = "/api/verify";
 
     // ── URL PARAMS ───────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const TOKEN = urlParams.get('token');
-    const UID = urlParams.get('uid');
-    const CID = urlParams.get('cid');
+    const UID   = urlParams.get('uid');
+    const CID   = urlParams.get('cid');
     const GROUP = urlParams.get('group');
 
     // ── RUNTIME STATE ────────────────────────────────────────────────────────
     let captchaToken = null;
 
-    // ── HARD GUARD: abort if required URL params are missing ─────────────────
+    // ── HARD GUARD ───────────────────────────────────────────────────────────
     if (!TOKEN || !UID || !CID) {
       document.getElementById('verify-btn').disabled = true;
       setStatus('error', '❌ Invalid or missing session parameters. Use the link provided by the bot.');
     }
 
-    // Populate group name from URL
     if (GROUP) {
       document.getElementById('group-name').textContent = decodeURIComponent(GROUP);
     }
@@ -275,14 +269,12 @@
       try {
         const res = await fetch(VERIFY_API_ENDPOINT, {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             captcha_token: captchaToken,
             token: TOKEN,
             uid: UID,
             cid: CID,
-            // ✅ CHANGE 2: send Telegram's signed initData so the server can
-            // verify this request genuinely came from a real Telegram user
             init_data: tg.initData,
           }),
         });
@@ -305,25 +297,14 @@
         }
 
         // ── SUCCESS ───────────────────────────────────────────────────────────
-        setStatus('success', '🎉 Verified! Returning you to Telegram…');
-        btn.textContent = 'Redirecting…';
+        // The backend already sent the invite link directly via the bot.
+        // Just show success and close the Mini App — no sendData() needed.
+        setStatus('success', '🎉 Verified! Check your Telegram chat for the invite link.');
+        btn.textContent = 'Done ✓';
 
         setTimeout(() => {
-          try {
-            console.log("initData:", tg.initData);
-            console.log("Attempting sendData...");
-            tg.sendData(JSON.stringify({
-              verified: true,
-              uid: UID,
-              cid: CID,
-            }));
-            console.log("sendData called successfully");
-          } catch (e) {
-            console.error("sendData failed:", e);
-            // Fallback to old method if sendData fails
-            window.location.href = `https://t.me/${BOT_USERNAME}?start=verified_${TOKEN}`;
-          }
-        }, 1200);
+          tg.close();
+        }, 1500);
 
       } catch (err) {
         console.error('Verify fetch failed:', err);
