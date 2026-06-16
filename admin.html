@@ -397,6 +397,7 @@
 
         .fg input,
         .fg textarea,
+        .fg open,
         .fg select {
             width: 100%;
             background: rgba(255, 255, 255, 0.05);
@@ -428,6 +429,12 @@
         .fg-row {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            gap: 13px;
+        }
+
+        .fg-triple-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
             gap: 13px;
         }
 
@@ -811,7 +818,6 @@
 
 <body>
 
-    <!-- ══ LOGIN ══ -->
     <div id="login-page">
         <div class="login-box">
             <div class="login-logo">🐾 MAMEINU</div>
@@ -825,7 +831,6 @@
         </div>
     </div>
 
-    <!-- ══ ADMIN ══ -->
     <div id="admin-page">
 
         <div class="topbar">
@@ -845,7 +850,6 @@
 
         <div class="admin-body">
 
-            <!-- SIDEBAR -->
             <nav class="sidebar">
                 <div class="sidebar-label">Overview</div>
                 <button class="nav-btn active" data-p="dashboard" onclick="go(this)"><span
@@ -865,10 +869,8 @@
                         class="icon">🗄️</span>Database</button>
             </nav>
 
-            <!-- MAIN -->
             <div class="main">
 
-                <!-- ── DASHBOARD ── -->
                 <div class="page active" id="page-dashboard">
                     <div class="sec-head">
                         <h2>DASHBOARD</h2>
@@ -922,7 +924,6 @@
                     </div>
                 </div>
 
-                <!-- ── TASKS ── -->
                 <div class="page" id="page-tasks">
                     <div class="sec-head">
                         <h2>TASKS</h2>
@@ -953,10 +954,14 @@
                             <label>Description</label>
                             <input id="t-desc" placeholder="Short helper text shown to the player" />
                         </div>
-                        <div class="fg-row">
+                        <div class="fg-triple-row">
                             <div class="fg">
                                 <label>Sort Order</label>
                                 <input type="number" id="t-order" value="5" min="1" />
+                            </div>
+                            <div class="fg">
+                                <label>Points Reward</label>
+                                <input type="number" id="t-points" value="0" min="0" placeholder="0" />
                             </div>
                             <div class="fg">
                                 <label>Active on launch?</label>
@@ -978,6 +983,7 @@
                                         <th>Order</th>
                                         <th>Title</th>
                                         <th>Type</th>
+                                        <th>Points</th>
                                         <th>Link</th>
                                         <th>Active</th>
                                         <th>Actions</th>
@@ -985,7 +991,7 @@
                                 </thead>
                                 <tbody id="t-tbl">
                                     <tr>
-                                        <td colspan="6" class="loading-row"><span class="spinner"></span> Loading…</td>
+                                        <td colspan="7" class="loading-row"><span class="spinner"></span> Loading…</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -993,7 +999,6 @@
                     </div>
                 </div>
 
-                <!-- ── BROADCAST ── -->
                 <div class="page" id="page-broadcast">
                     <div class="sec-head">
                         <h2>BROADCAST</h2>
@@ -1057,7 +1062,6 @@
                     </div>
                 </div>
 
-                <!-- ── GAME CONTROLS ── -->
                 <div class="page" id="page-controls">
                     <div class="sec-head">
                         <h2>GAME CONTROLS</h2>
@@ -1133,7 +1137,6 @@
                     </div>
                 </div>
 
-                <!-- ── PLAYERS ── -->
                 <div class="page" id="page-players">
                     <div class="sec-head">
                         <h2>PLAYERS</h2>
@@ -1169,7 +1172,6 @@
                     </div>
                 </div>
 
-                <!-- ── SCORES ── -->
                 <div class="page" id="page-scores">
                     <div class="sec-head">
                         <h2>SCORES</h2>
@@ -1198,7 +1200,6 @@
                     </div>
                 </div>
 
-                <!-- ── DATABASE ── -->
                 <div class="page" id="page-database">
                     <div class="sec-head">
                         <h2>DATABASE</h2>
@@ -1264,11 +1265,10 @@
                     </div>
                 </div>
 
-            </div><!-- /main -->
+            </div>
         </div>
     </div>
 
-    <!-- ── MODAL ── -->
     <div class="overlay" id="modal-overlay">
         <div class="modal">
             <div class="modal-icon" id="m-icon">⚠️</div>
@@ -1289,13 +1289,8 @@
         ───────────────────────────────────────── */
         const SUPABASE_URL = 'https://msfcjiejmzduwycekavh.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zZmNqaWVqbXpkdXd5Y2VrYXZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0MDkyMDYsImV4cCI6MjA5Njk4NTIwNn0.orhfYCoAvqfdNjuBoBAJ6YlGgFjEOOKnuNc8EPHcOrQ';
-
-        // 🔑 SERVICE ROLE KEY — bypasses RLS for admin operations (delete, clear, reset).
-        // Get this from: Supabase Dashboard → Settings → API → service_role (secret)
-        // ⚠️ NEVER expose this key in a public-facing app. Admin panel only.
         const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1zZmNqaWVqbXpkdXd5Y2VrYXZoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTQwOTIwNiwiZXhwIjoyMDk2OTg1MjA2fQ.r9RyVymwFmrZJSCJ-_tWZbXYs-auOdRUp_3tkHVqSKE';
 
-        // Two clients: anon for login check, service for all admin writes/deletes
         const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         const sbAdmin = supabase.createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
             auth: {autoRefreshToken: false, persistSession: false}
@@ -1316,7 +1311,6 @@
 
             if (!u || !p) {err.textContent = '⚠️ Enter username and password'; return;}
 
-            // Query the admins table using service role key to bypass RLS
             const {data, error} = await sbAdmin
                 .from('admins')
                 .select('id')
@@ -1411,32 +1405,9 @@
                     break;
             }
         }
-        // Add this helper function inside your admin.html script tags
-        async function nukeTbl(tableName) {
-            try {
-                const {error} = await sb
-                    .from(tableName)
-                    .delete()
-                    .neq('id', -1); // Deletes all rows where ID doesn't equal a fake index (bypasses RLS blocks)
 
-                if (error) throw error;
-
-                toast(`🗑️ Cleared all entries from ${tableName} successfully!`, 'ok');
-
-                // Refresh whichever active view you are currently looking at
-                loadDashboard();
-                if (tableName === 'scores') loadScores();
-                if (tableName === 'broadcasts') loadBroadcasts();
-                if (tableName === 'users') loadPlayers();
-                loadDbOverview();
-            } catch (err) {
-                console.error("Nuke table failure:", err);
-                toast(`❌ Failed clearing ${tableName}: ` + err.message, 'err');
-            }
-        }
         /* ─────────────────────────────────────────
            GAME PAUSE  (game_config table)
-           key = 'paused', value = 'true' | 'false'
         ───────────────────────────────────────── */
         async function loadPauseState() {
             try {
@@ -1478,7 +1449,6 @@
            DASHBOARD
         ───────────────────────────────────────── */
         async function loadDashboard() {
-            // Stats — uses exact column names from db.txt
             const [uAll, uVer, sc, tk] = await Promise.all([
                 sb.from('users').select('*', {count: 'exact', head: true}),
                 sb.from('users').select('*', {count: 'exact', head: true}).eq('is_verified', true),
@@ -1491,7 +1461,6 @@
             set('d-games', (sc.count || 0).toLocaleString());
             set('d-tasks', (tk.count || 0).toLocaleString());
 
-            // Leaderboard view from db.txt
             const {data: lb} = await sb.from('leaderboard').select('*');
             const medals = ['🥇', '🥈', '🥉'];
             const tbody = document.getElementById('d-lb');
@@ -1508,20 +1477,19 @@
         }
 
         /* ─────────────────────────────────────────
-           TASKS  — tasks table from db.txt
-           columns: id, title, description, link,
-                    type, is_active, sort_order, created_at
+           TASKS  — integrated points fields
         ───────────────────────────────────────── */
         async function loadTasks() {
             const tbody = document.getElementById('t-tbl');
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-row"><span class="spinner"></span> Loading…</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="loading-row"><span class="spinner"></span> Loading…</td></tr>';
             const {data} = await sb.from('tasks').select('*').order('sort_order');
-            if (!data?.length) {tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No tasks yet</td></tr>'; return;}
+            if (!data?.length) {tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No tasks yet</td></tr>'; return;}
 
             tbody.innerHTML = data.map(t => `<tr>
     <td>${t.sort_order}</td>
     <td><strong>${esc(t.title)}</strong>${t.description ? `<div class="text-sm text-muted">${esc(t.description)}</div>` : ''}</td>
     <td><span class="badge ${t.type === 'wallet' ? 'b-gold' : t.type === 'manual' ? 'b-red' : 'b-blue'}">${t.type}</span></td>
+    <td class="text-gold" style="font-weight:600;">+${t.points || 0}</td>
     <td class="text-sm text-muted">${t.link ? `<a href="${esc(t.link)}" target="_blank" style="color:var(--blue)">${esc(t.link.length > 35 ? t.link.slice(0, 35) + '…' : t.link)}</a>` : '—'}</td>
     <td><label class="tog"><input type="checkbox" ${t.is_active ? 'checked' : ''} onchange="toggleTask(${t.id},this.checked)"><span class="tog-sl"></span></label></td>
     <td>
@@ -1536,18 +1504,20 @@
             const link = val('t-link');
             const desc = val('t-desc');
             const order = parseInt(val('t-order')) || 1;
+            const points = parseInt(val('t-points')) || 0;
             const active = val('t-active') === 'true';
 
             if (!title) {toast('⚠️ Title is required', 'err'); return;}
 
             const {error} = await sbAdmin.from('tasks').insert({
                 title, type, link: link || null, description: desc || null,
-                sort_order: order, is_active: active,
+                sort_order: order, points, is_active: active,
             });
 
             if (error) {toast('❌ ' + error.message, 'err'); return;}
-            toast('✅ Task added!', 'ok');
+            toast('✅ Task added successfully!', 'ok');
             ['t-title', 't-link', 't-desc'].forEach(id => {document.getElementById(id).value = '';});
+            document.getElementById('t-points').value = '0';
             loadTasks();
         }
 
@@ -1564,8 +1534,7 @@
         }
 
         /* ─────────────────────────────────────────
-           BROADCAST  — broadcasts table (create if needed)
-           columns: id, title, body, type, target, created_at
+           BROADCAST
         ───────────────────────────────────────── */
         async function sendBroadcast() {
             const title = val('bc-title');
@@ -1577,7 +1546,7 @@
             const {error} = await sbAdmin.from('broadcasts').insert({
                 title, body, type, target, created_at: new Date().toISOString(),
             });
-            if (error) {toast('❌ ' + error.message + ' — run the SQL below to create the broadcasts table', 'err'); return;}
+            if (error) {toast('❌ ' + error.message, 'err'); return;}
             toast('📢 Broadcast sent!', 'ok');
             document.getElementById('bc-title').value = '';
             document.getElementById('bc-body').value = '';
@@ -1589,7 +1558,7 @@
             const tbody = document.getElementById('bc-tbl');
             tbody.innerHTML = '<tr><td colspan="5" class="loading-row"><span class="spinner"></span> Loading…</td></tr>';
             const {data, error} = await sb.from('broadcasts').select('*').order('created_at', {ascending: false}).limit(60);
-            if (error) {tbody.innerHTML = '<tr><td colspan="5" class="empty-row text-muted">broadcasts table not found — add it first</td></tr>'; return;}
+            if (error) {tbody.innerHTML = '<tr><td colspan="5" class="empty-row text-muted">broadcasts table not found</td></tr>'; return;}
             if (!data?.length) {tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No broadcasts yet</td></tr>'; return;}
             const tc = {info: 'b-blue', update: 'b-green', warning: 'b-gold', reward: 'b-muted'};
             tbody.innerHTML = data.map(b => `<tr>
@@ -1609,10 +1578,7 @@
         }
 
         /* ─────────────────────────────────────────
-           PLAYERS  — users table from db.txt
-           columns: id, telegram_id, username,
-                    wallet_address, tasks_completed,
-                    is_verified, joined_at
+           PLAYERS
         ───────────────────────────────────────── */
         async function loadPlayers() {
             const tbody = document.getElementById('p-tbl');
@@ -1663,9 +1629,7 @@
         }
 
         /* ─────────────────────────────────────────
-           SCORES  — scores table from db.txt
-           columns: id, telegram_id, username,
-                    score, played_at
+           SCORES
         ───────────────────────────────────────── */
         async function loadScores() {
             const tbody = document.getElementById('sc-tbl');
@@ -1696,10 +1660,10 @@
             const tables = [
                 {name: 'users', note: 'telegram_id, username, wallet_address, tasks_completed, is_verified, joined_at'},
                 {name: 'scores', note: 'telegram_id → users, score, played_at'},
-                {name: 'tasks', note: 'title, type, link, is_active, sort_order'},
+                {name: 'tasks', note: 'title, type, link, points, is_active, sort_order'},
                 {name: 'admins', note: 'username, password (RLS blocks public select)'},
-                {name: 'game_config', note: 'key / value config — create manually if missing'},
-                {name: 'broadcasts', note: 'title, body, type, target — create manually if missing'},
+                {name: 'game_config', note: 'key / value config — global conditions and parameters'},
+                {name: 'broadcasts', note: 'title, body, type, target — in-app notifications'}
             ];
 
             tbody.innerHTML = '<tr><td colspan="4" class="loading-row"><span class="spinner"></span> Loading…</td></tr>';
@@ -1741,11 +1705,10 @@
         }
 
         /* ─────────────────────────────────────────
-           HELPERS
+           NUKE & EXPORT HELPERS (Bypasses RLS limits)
         ───────────────────────────────────────── */
         async function nukeTbl(name) {
             try {
-                // Use sbAdmin (service_role key) to bypass RLS restrictions
                 const uniqueColumn = (name === 'users') ? 'telegram_id' : 'id';
                 const {error} = await sbAdmin
                     .from(name)
@@ -1768,6 +1731,7 @@
                 toast(`❌ Deletion failed: ${err.message}`, 'err');
             }
         }
+
         async function exportTable(name) {
             const {data, error} = await sb.from(name).select('*');
             if (error) {toast('❌ ' + error.message, 'err'); return;}
