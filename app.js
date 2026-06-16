@@ -592,43 +592,11 @@ async function loadLeaderboard() {
   container.innerHTML = '<div class="lb-loading">Loading Rankings...</div>';
   
   try {
-    // 1. Query the view using the correct column name seen in image_fa9ebb.png (best_score)
-    let { data, error } = await sb
-      .from('leaderboard')
-      .select('username, telegram_id, best_score')
-      .order('best_score', { ascending: false })
-      .limit(50);
+    // 🛠️ Direct call to the secure database function that sums up everything
+    const { data, error } = await sb.rpc('get_public_leaderboard');
 
-    // 2. Fallback: If the view is completely empty (as shown in the dashboard), pull from raw scores
-    if (error || !data || data.length === 0) {
-      console.warn("Leaderboard view is empty or restricted. Falling back to raw scores...");
-      
-      const { data: rawData, error: fallbackError } = await sb
-        .from('scores')
-        .select('username, score, telegram_id')
-        .order('score', { ascending: false })
-        .limit(200);
+    if (error) throw error;
 
-      if (fallbackError) throw fallbackError;
-
-      // Deduplicate the raw game plays so each player only shows up once with their peak score
-      const seen = new Set();
-      data = [];
-      for (const row of rawData || []) {
-        const uid = String(row.telegram_id);
-        if (!seen.has(uid)) {
-          seen.add(uid);
-          data.push({
-            username: row.username,
-            telegram_id: row.telegram_id,
-            best_score: row.score // Map 'score' to 'best_score' for layout uniformity
-          });
-        }
-        if (data.length >= 50) break;
-      }
-    }
-
-    // 3. Render the UI
     if (!data || !data.length) {
       container.innerHTML = '<div class="lb-loading">No scores yet! Be the first! 🐾</div>';
       return;
@@ -641,9 +609,9 @@ async function loadLeaderboard() {
       const cls = i === 0 ? 'podium-1' : i === 1 ? 'podium-2' : i === 2 ? 'podium-3' : '';
       const isYou = String(row.telegram_id) === String(tgUser.id);
       
-      // Keep local high score updated if the DB record is higher
-      if (isYou && row.best_score > playerHighScore) {
-        playerHighScore = row.best_score;
+      // 🔄 Force Sync: Make your personal best equal your combined leaderboard score total
+      if (isYou) {
+        playerHighScore = Number(row.best_score);
         localStorage.setItem('mameinu_highscore', playerHighScore);
       }
 
@@ -656,10 +624,11 @@ async function loadLeaderboard() {
       container.appendChild(div);
     });
     
+    // Refresh panels so your personal best screen immediately updates to match the leaderboard value
     updateSettingsPanel();
     
   } catch (e) {
-    console.error('Leaderboard error:', e);
+    console.error('Leaderboard RPC error:', e);
     container.innerHTML = '<div class="lb-loading" style="color:var(--red);">⚠️ Failed to load rankings</div>';
   }
 }
