@@ -200,8 +200,8 @@
     // ── URL PARAMS ───────────────────────────────────────────────────────────
     const urlParams = new URLSearchParams(window.location.search);
     const TOKEN = urlParams.get('token');
-    const UID   = urlParams.get('uid');
-    const CID   = urlParams.get('cid');
+    const UID = urlParams.get('uid');
+    const CID = urlParams.get('cid');
     const GROUP = urlParams.get('group');
 
     // ── RUNTIME STATE ────────────────────────────────────────────────────────
@@ -269,7 +269,7 @@
       try {
         const res = await fetch(VERIFY_API_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
             captcha_token: captchaToken,
             token: TOKEN,
