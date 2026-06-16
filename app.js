@@ -592,16 +592,16 @@ async function loadLeaderboard() {
   container.innerHTML = '<div class="lb-loading">Loading Rankings...</div>';
   
   try {
-    // Attempt 1: Fetch from the optimized leaderboard view
+    // 1. Query the view using the correct column name seen in image_fa9ebb.png (best_score)
     let { data, error } = await sb
       .from('leaderboard')
-      .select('username, max_score, telegram_id')
-      .order('max_score', { ascending: false })
+      .select('username, telegram_id, best_score')
+      .order('best_score', { ascending: false })
       .limit(50);
 
-    // Attempt 2: If the view returns nothing or errors out, fall back to the raw table
+    // 2. Fallback: If the view is completely empty (as shown in the dashboard), pull from raw scores
     if (error || !data || data.length === 0) {
-      console.warn("Leaderboard view empty or restricted. Falling back to raw scores table...");
+      console.warn("Leaderboard view is empty or restricted. Falling back to raw scores...");
       
       const { data: rawData, error: fallbackError } = await sb
         .from('scores')
@@ -611,7 +611,7 @@ async function loadLeaderboard() {
 
       if (fallbackError) throw fallbackError;
 
-      // Deduplicate rows manually so each player only appears once with their highest score
+      // Deduplicate the raw game plays so each player only shows up once with their peak score
       const seen = new Set();
       data = [];
       for (const row of rawData || []) {
@@ -620,15 +620,15 @@ async function loadLeaderboard() {
           seen.add(uid);
           data.push({
             username: row.username,
-            max_score: row.score,
-            telegram_id: row.telegram_id
+            telegram_id: row.telegram_id,
+            best_score: row.score // Map 'score' to 'best_score' for layout uniformity
           });
         }
         if (data.length >= 50) break;
       }
     }
 
-    // If both the view and table are completely empty
+    // 3. Render the UI
     if (!data || !data.length) {
       container.innerHTML = '<div class="lb-loading">No scores yet! Be the first! 🐾</div>';
       return;
@@ -641,9 +641,9 @@ async function loadLeaderboard() {
       const cls = i === 0 ? 'podium-1' : i === 1 ? 'podium-2' : i === 2 ? 'podium-3' : '';
       const isYou = String(row.telegram_id) === String(tgUser.id);
       
-      // Sync local high score with database if server has a higher record
-      if (isYou && row.max_score > playerHighScore) {
-        playerHighScore = row.max_score;
+      // Keep local high score updated if the DB record is higher
+      if (isYou && row.best_score > playerHighScore) {
+        playerHighScore = row.best_score;
         localStorage.setItem('mameinu_highscore', playerHighScore);
       }
 
@@ -652,7 +652,7 @@ async function loadLeaderboard() {
       div.innerHTML = `
         <div class="rank-badge">${medals[i] || '#' + (i + 1)}</div>
         <div class="player-name">${escapeHtml(row.username || 'Anonymous')}${isYou ? ' <span>YOU</span>' : ''}</div>
-        <div class="player-score">${Number(row.max_score).toLocaleString()}</div>`;
+        <div class="player-score">${Number(row.best_score).toLocaleString()}</div>`;
       container.appendChild(div);
     });
     
