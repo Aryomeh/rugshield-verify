@@ -7,10 +7,15 @@
   <title>Verify — RugShield</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link
-    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Space+Mono:wght=400;700&family=Sora:wght=300;400;600&display=swap"
     rel="stylesheet" />
   <script src="https://js.hcaptcha.com/1/api.js" async defer></script>
+
+  <!-- Core Telegram Web App API -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Official Telegram Analytics SDK -->
+  <script src="https://tganalytics.xyz/index.js"></script>
 
   <style>
     *,
@@ -194,6 +199,23 @@
     tg.ready();
     tg.expand();
 
+    // ── TELEGRAM ANALYTICS INITIALIZATION ─────────────────────────────────────
+    if (window.telegramAnalytics) {
+      try {
+        window.telegramAnalytics.init({
+          token: "rug_guard", // Your specific identifier from the dashboard
+          appName: "RugShield"
+        });
+
+        // Immediate launch event required to flip status from "Waiting for SDK"
+        window.telegramAnalytics.track('app_open');
+      } catch (analyticsError) {
+        console.error("Telegram Analytics failed to initialize:", analyticsError);
+      }
+    } else {
+      console.warn("Telegram Analytics SDK not found on window object.");
+    }
+
     // ── CONFIGURATION ────────────────────────────────────────────────────────
     const VERIFY_API_ENDPOINT = "/api/verify";
 
@@ -297,8 +319,11 @@
         }
 
         // ── SUCCESS ───────────────────────────────────────────────────────────
-        // The backend already sent the invite link directly via the bot.
-        // Just show success and close the Mini App — no sendData() needed.
+        // Track the verification success event
+        if (window.telegramAnalytics) {
+          window.telegramAnalytics.track('verification_success');
+        }
+
         setStatus('success', '🎉 Verified! Check your Telegram chat for the invite link.');
         btn.textContent = 'Done ✓';
 
