@@ -203,8 +203,11 @@
     if (window.telegramAnalytics) {
       try {
         window.telegramAnalytics.init({
-          token: "rug_guard", // Your specific identifier from the dashboard
-          appName: "RugShield"
+          // 1. Paste the LONG Auth Token/JWT string you got from @DataChief_bot here:
+          token: "eyJhcHBfbmFtZSI6InJ1Z19ndWFyZCIsImFwcF91cmwiOiJodHRwczovL3QubWUvcnVnc2hpZWxkYm90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vcnVnc2hpZWxkLXZlcmlmeS52ZXJjZWwuYXBwIn0=!rqT6UDJYg6zh1ujQywZfC9xJm+V2AtOWSiZ++jOOX1w=",
+
+          // 2. Put your clean identifier slug here:
+          appName: "rug_guard"
         });
 
         // Immediate launch event required to flip status from "Waiting for SDK"
