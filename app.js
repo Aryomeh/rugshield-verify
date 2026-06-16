@@ -590,16 +590,44 @@ async function loadLeaderboard() {
   const container = document.getElementById('leaderboard-list');
   if (!container) return;
   container.innerHTML = '<div class="lb-loading">Loading Rankings...</div>';
+  
   try {
-    // Query the optimized leaderboard view which ranks unique users by their single max score
-    const { data, error } = await sb
+    // Try 1: Fetch from your optimized view first
+    let { data, error } = await sb
       .from('leaderboard')
       .select('username, max_score, telegram_id')
       .order('max_score', { ascending: false })
       .limit(50);
 
-    if (error) throw error;
-    
+    // Try 2: If the view fails or is blocked by permissions, safely fall back to the scores table
+    if (error || !data || data.length === 0) {
+      console.warn("Leaderboard view unavailable, switching to raw fallback query.");
+      
+      const { data: rawData, error: fallbackError } = await sb
+        .from('scores')
+        .select('username, score, telegram_id')
+        .order('score', { ascending: false })
+        .limit(200);
+
+      if (fallbackError) throw fallbackError;
+
+      // Cleanly deduplicate raw records so players don't see multiple entries of the same user
+      const seen = new Set();
+      data = [];
+      for (const row of rawData || []) {
+        const uid = String(row.telegram_id);
+        if (!seen.has(uid)) {
+          seen.add(uid);
+          data.push({
+            username: row.username,
+            max_score: row.score,
+            telegram_id: row.telegram_id
+          });
+        }
+        if (data.length >= 50) break;
+      }
+    }
+
     if (!data || !data.length) {
       container.innerHTML = '<div class="lb-loading">No scores yet! Be the first! 🐾</div>';
       return;
@@ -612,7 +640,7 @@ async function loadLeaderboard() {
       const cls = i === 0 ? 'podium-1' : i === 1 ? 'podium-2' : i === 2 ? 'podium-3' : '';
       const isYou = String(row.telegram_id) === String(tgUser.id);
       
-      // Secondary Sync: If the database high score is higher than localStorage, correct it
+      // Auto-sync personal best if the server has a higher record than localStorage
       if (isYou && row.max_score > playerHighScore) {
         playerHighScore = row.max_score;
         localStorage.setItem('mameinu_highscore', playerHighScore);
@@ -627,7 +655,6 @@ async function loadLeaderboard() {
       container.appendChild(div);
     });
     
-    // Refresh panels in case the local high score was updated
     updateSettingsPanel();
     
   } catch (e) {
@@ -635,7 +662,6 @@ async function loadLeaderboard() {
     container.innerHTML = '<div class="lb-loading" style="color:var(--red);">⚠️ Failed to load rankings</div>';
   }
 }
-
 
 function renderRefTasks() {
   document.querySelectorAll('.btn-claim').forEach(btn => {
