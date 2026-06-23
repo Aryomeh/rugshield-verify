@@ -336,9 +336,20 @@
 
       } catch (err) {
         console.error('Verify fetch failed:', err);
-        setStatus('error', '❌ Network error. Please check your connection and try again.');
+
+        // 1. Update status message to let them know the link might be ready
+        setStatus('error', 'Close the app and check your chat for the link.');
+
+        // 2. Repurpose the main button to close the app safely
         btn.disabled = false;
-        btn.textContent = 'Verify & Return to Bot';
+        btn.style.background = 'var(--muted)';
+        btn.textContent = 'Close Page';
+
+        // 3. Override the action to immediately shut the Mini App
+        btn.onclick = function () {
+          tg.close();
+        };
+
         if (typeof hcaptcha !== 'undefined') hcaptcha.reset();
         captchaToken = null;
       }
