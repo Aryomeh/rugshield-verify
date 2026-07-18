@@ -1,0 +1,5 @@
+fastapi
+python-telegram-bot==21.*
+asyncpg
+httpx
+requests
