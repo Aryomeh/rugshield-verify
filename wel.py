@@ -290,7 +290,6 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         "📌 *COMMANDS*\n"
         "/panel — Open the admin panel _(group owner only, DM only)_\n"
-        "/buystatus — View buy bot status _(super admin only)_\n"
         "/start — Verify yourself as a human to join the group\n"
         "/help — Show this message\n\n"
 
