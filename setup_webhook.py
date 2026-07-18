@@ -22,7 +22,7 @@ def main():
         sys.exit(1)
 
     base_url = sys.argv[1].rstrip("/")
-    webhook_url = f"{base_url}/api/telegram"
+    webhook_url = f"{base_url}/api/webhook"
 
     payload = {
         "url": webhook_url,
