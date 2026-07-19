@@ -73,12 +73,28 @@ CREATE TABLE IF NOT EXISTS welcome_settings (
     set_at          TIMESTAMPTZ DEFAULT NULL
 );
 
+CREATE TABLE IF NOT EXISTS setup_state (
+    user_id               BIGINT PRIMARY KEY,
+    step                  TEXT NOT NULL,
+    target_group_chat_id  BIGINT DEFAULT NULL,
+    updated_at            TIMESTAMPTZ NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS pending_actions (
+    user_id    BIGINT PRIMARY KEY,
+    action     TEXT NOT NULL,
+    chat_id    BIGINT NOT NULL,
+    extra      JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS custom_auto_replies (
     id         SERIAL PRIMARY KEY,
     chat_id    BIGINT NOT NULL,
     keyword    TEXT NOT NULL,
     reply_text TEXT NOT NULL
 );
+
 
 -- New table: replaces context.job_queue.run_once() delayed auto-deletes.
 -- A Vercel Cron job sweeps this every minute and deletes any due messages.
