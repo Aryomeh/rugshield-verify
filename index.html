@@ -338,7 +338,7 @@
       } catch (err) {
         console.error('Verify fetch failed:', err);
 
-        setStatus('error', 'Close the app and check your chat for the link.');
+        setStatus('error', `⚠️ Debug: ${err.name}: ${err.message}`);
 
         btn.disabled = false;
         btn.style.background = 'var(--muted)';
