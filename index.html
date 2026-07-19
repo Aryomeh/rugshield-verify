@@ -325,24 +325,24 @@
           console.warn('Analytics tracking failed (non-fatal):', analyticsErr);
         }
 
-        setStatus('success', '🎉 Verified! Sending you the invite link…');
+        // NOTE: tg.sendData() only works for Mini Apps launched via a Reply
+        // Keyboard button — this one is launched via an Inline Keyboard
+        // button, so sendData() silently does nothing on this button type.
+        // verify.py already sends the invite link server-side above, so we
+        // just need to close the app. The earlier "close doesn't work" issue
+        // was actually the analytics crash aborting this code before it ever
+        // reached tg.close() — now that's fixed, this runs reliably.
+        setStatus('success', '🎉 Verified! Check your Telegram chat for the invite link.');
         btn.textContent = 'Done ✓';
 
-        // Hand off to the bot: sendData() delivers {verified, uid, cid} to
-        // wel.py's handle_webapp_data(), which generates + sends the invite
-        // link. Calling sendData() is what Telegram guarantees will close
-        // this Mini App automatically — tg.close() alone isn't reliable
-        // after an async fetch + delay on every client.
-        tg.sendData(JSON.stringify({
-          verified: true,
-          uid: UID,
-          cid: CID,
-        }));
+        setTimeout(() => {
+          tg.close();
+        }, 1200);
 
       } catch (err) {
         console.error('Verify fetch failed:', err);
 
-        setStatus('error', `⚠️ Debug: ${err.name}: ${err.message}`);
+        setStatus('error', 'Close the app and check your chat for the link.');
 
         btn.disabled = false;
         btn.style.background = 'var(--muted)';
