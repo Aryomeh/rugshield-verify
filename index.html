@@ -203,14 +203,9 @@
     if (window.telegramAnalytics) {
       try {
         window.telegramAnalytics.init({
-          // 1. Paste the LONG Auth Token/JWT string you got from @DataChief_bot here:
           token: "eyJhcHBfbmFtZSI6InJ1Z19ndWFyZCIsImFwcF91cmwiOiJodHRwczovL3QubWUvcnVnc2hpZWxkYm90IiwiYXBwX2RvbWFpbiI6Imh0dHBzOi8vcnVnc2hpZWxkLXZlcmlmeS52ZXJjZWwuYXBwIn0=!rqT6UDJYg6zh1ujQywZfC9xJm+V2AtOWSiZ++jOOX1w=",
-
-          // 2. Put your clean identifier slug here:
           appName: "Communityshieldbot"
         });
-
-        // Immediate launch event required to flip status from "Waiting for SDK"
         window.telegramAnalytics.track('app_open');
       } catch (analyticsError) {
         console.error("Telegram Analytics failed to initialize:", analyticsError);
@@ -322,30 +317,33 @@
         }
 
         // ── SUCCESS ───────────────────────────────────────────────────────────
-        // Track the verification success event
         if (window.telegramAnalytics) {
           window.telegramAnalytics.track('verification_success');
         }
 
-        setStatus('success', '🎉 Verified! Check your Telegram chat for the invite link.');
+        setStatus('success', '🎉 Verified! Sending you the invite link…');
         btn.textContent = 'Done ✓';
 
-        setTimeout(() => {
-          tg.close();
-        }, 1500);
+        // Hand off to the bot: sendData() delivers {verified, uid, cid} to
+        // wel.py's handle_webapp_data(), which generates + sends the invite
+        // link. Calling sendData() is what Telegram guarantees will close
+        // this Mini App automatically — tg.close() alone isn't reliable
+        // after an async fetch + delay on every client.
+        tg.sendData(JSON.stringify({
+          verified: true,
+          uid: UID,
+          cid: CID,
+        }));
 
       } catch (err) {
         console.error('Verify fetch failed:', err);
 
-        // 1. Update status message to let them know the link might be ready
         setStatus('error', 'Close the app and check your chat for the link.');
 
-        // 2. Repurpose the main button to close the app safely
         btn.disabled = false;
         btn.style.background = 'var(--muted)';
         btn.textContent = 'Close Page';
 
-        // 3. Override the action to immediately shut the Mini App
         btn.onclick = function () {
           tg.close();
         };
