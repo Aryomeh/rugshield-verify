@@ -48,7 +48,7 @@ async def _home_text_and_keyboard() -> tuple[str, InlineKeyboardMarkup]:
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     text = (
-        "👑 *RugShield Super Admin Panel*\n"
+        "👑 *Communityshieldbot Super Admin Panel*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"🏘️ *Groups using bot:* `{stats['total_groups']}`\n"
         f"🔒 *Private groups set up:* `{stats['total_private_groups']}`\n"

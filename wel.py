@@ -223,9 +223,6 @@ async def _panel_keyboard(chat_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton("💬 Add Welcome Message", callback_data=f"p|addwelcome|{chat_id}")],
         [InlineKeyboardButton(media_label,              callback_data=f"p|setwelcomemedia|{chat_id}"),
          InlineKeyboardButton("🗑 Remove Image/GIF",    callback_data=f"p|removewelcomemedia|{chat_id}")],
-        # ── Buy alert GIF controls ────────────────────────────────────────────
-        [InlineKeyboardButton(buy_gif_label,            callback_data=f"p|setbuygif|{chat_id}"),
-         InlineKeyboardButton("🗑 Remove Buy GIF",      callback_data=f"p|removebuygif|{chat_id}")],
         [InlineKeyboardButton("🔗 Set Social Links", callback_data=f"p|setsocials|{chat_id}")],
         [InlineKeyboardButton("🤖 Auto Replies",     callback_data=f"p|autoreplies|{chat_id}")],
         [InlineKeyboardButton("🔗 Link Portal Channel", callback_data=f"sg|link_portal|{chat_id}")],
@@ -285,7 +282,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     text = (
-        "🛡️ *RugShield Bot — Help Guide*\n"
+        "🛡️ *communityShield Bot — Help Guide*\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         "📌 *COMMANDS*\n"
@@ -370,7 +367,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "🐳 $5,000+  |  🐬 $1,000+  |  🦈 $500+  |  🐟 $10+\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        "_Powered by RugShield 🛡️_"
+        "_Powered by CommunityShield 🛡️_"
     )
 
     await update.effective_message.reply_text(text, parse_mode="Markdown")  # type: ignore
@@ -533,24 +530,6 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             reply_markup=_back_btn(chat_id),
         )
 
-    # ── Toggle buy bot ────────────────────────────────────────────────────────
-    elif action == "togglebuybot":
-        if not await get_ca(chat_id):
-            await query.edit_message_text("ℹ️ No CA is set — set a CA first.", reply_markup=_back_btn(chat_id))
-            return
-        paused = await is_buy_bot_paused(chat_id)
-        await set_buy_bot_paused(chat_id, not paused)
-        if paused:
-            await query.edit_message_text(
-                "▶️ *Buy bot resumed!*\n\nBuy alerts are now active.",
-                parse_mode="Markdown", reply_markup=_back_btn(chat_id),
-            )
-        else:
-            await query.edit_message_text(
-                "⏸️ *Buy bot paused.*\n\nNo alerts until resumed.",
-                parse_mode="Markdown", reply_markup=_back_btn(chat_id),
-            )
-
     # ── Add FUD ───────────────────────────────────────────────────────────────
     elif action == "addfud":
         await set_pending_action(user.id, {"action": "addfud", "chat_id": chat_id})
@@ -622,19 +601,6 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             "Future welcome messages will be text-only.",
             parse_mode="Markdown",
             reply_markup=_back_btn(chat_id),
-        )
-
-    # ── Set buy alert GIF ─────────────────────────────────────────────────────
-    elif action == "setbuygif":
-        await set_pending_action(user.id, {"action": "setbuygif", "chat_id": chat_id})
-        ws = await get_welcome_settings(chat_id)
-        current = ws.get("buy_gif_file_id") if ws else None
-        note = "\n\n_A GIF is already set — send a new one to replace it._" if current else ""
-        await query.edit_message_text(
-            f"🎬 *Set Buy Alert GIF*{note}\n\n"
-            "Send me the GIF or animation to show on every buy alert.\n\n"
-            "_Send /skip to keep the current one._",
-            parse_mode="Markdown",
         )
 
     elif action == "setsocials":
@@ -1634,7 +1600,7 @@ async def handle_portal_channel_selection(
                 "Please do these steps first, then tap *Link Portal Channel* again:\n\n"
                 "1️⃣ Open your channel in Telegram\n"
                 "2️⃣ Go to *Administrators* → *Add Administrator*\n"
-                "3️⃣ Search for *@rugshieldbot* and add it\n"
+                "3️⃣ Search for *@communityshieldbot* and add it\n"
                 "4️⃣ Enable *Post Messages* and *Invite Users* rights\n"
                 "5️⃣ Tap Save, then come back here and tap the button again",
                 parse_mode="Markdown",

@@ -49,7 +49,7 @@ from db import (
 # ── Captcha / web verification base URL ──────────────────────────────────────
 VERIFY_WEB_URL = os.environ.get("VERIFY_WEB_URL", "https://rugshield-verify.vercel.app")
 
-BOT_USERNAME = "rugshieldbot"
+BOT_USERNAME = "communityshieldbot"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -165,7 +165,7 @@ async def setupgroup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
             text=(
                 "🔗 *Link a Public Portal Channel*\n\n"
                 "Before tapping the button below, make sure you have:\n\n"
-                "1️⃣ Added *@rugshieldbot* as an *Admin* to your channel\n"
+                "1️⃣ Added *@communityshieldbot* as an *Admin* to your channel\n"
                 "2️⃣ Given it *Post Messages* and *Invite Users* permissions\n"
                 "3️⃣ Made the channel *public* (it must have a t\\.me/ link)\n\n"
                 "Once that's done, tap the button to select your channel:"
@@ -346,11 +346,3 @@ async def _generate_invite_link(bot, chat_id: int) -> str:
     return link.invite_link
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  Portal channel selection step — the SECOND half of the AWAITING_PORTAL_CHANNEL
-#  flow. This used to be handled inline inside wel.py's
-#  handle_portal_channel_selection(), which reads SETUP_STATE directly.
-#  Since state now lives in Postgres, that handler in wel.py needs to call
-#  get_setup_state(user.id) instead of SETUP_STATE.get(user.id) — flagged here
-#  so it isn't missed when we convert wel.py next.
-# ══════════════════════════════════════════════════════════════════════════════

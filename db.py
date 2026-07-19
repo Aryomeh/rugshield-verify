@@ -1,4 +1,4 @@
-# db.py — RugShield bot data layer, rewritten for Neon Postgres (asyncpg).
+# db.py
 
 
 from __future__ import annotations
