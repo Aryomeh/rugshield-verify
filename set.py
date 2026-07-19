@@ -1,22 +1,4 @@
 # set.py — webhook/serverless-safe version
-#
-# Changes from the original:
-#   1. SETUP_STATE (in-memory dict) → Postgres `setup_state` table via db.py.
-#      Required because the portal-channel-link flow spans multiple separate
-#      Telegram updates (button click, then a later message), which are
-#      separate serverless invocations here — nothing survives in memory
-#      between them.
-#   2. context.job_queue.run_once(...) delayed deletes → db.queue_message_deletion(),
-#      swept by api/cron/sweep-deletes.py. job_queue needs a persistent
-#      APScheduler loop, which doesn't exist in a function that dies right
-#      after responding.
-#   3. Hardcoded HCAPTCHA_SECRET + the duplicate verify_captcha() helper are
-#      removed — they were dead code here (api.py already owns the real
-#      hCaptcha check against a DIFFERENT hcaptcha.com URL). Keeping two
-#      divergent copies of a secret-bearing check was a bug waiting to
-#      happen; api.py stays the single source of truth.
-#   4. VERIFY_WEB_URL now reads from an env var (falls back to the same
-#      default) so it isn't hardcoded per-deploy.
 
 from __future__ import annotations
 
@@ -44,6 +26,9 @@ from db import (
     set_setup_state,
     clear_setup_state,
     queue_message_deletion,
+    get_verification,
+    set_verification_dm_msg,
+    is_verified,
 )
 
 # ── Captcha / web verification base URL ──────────────────────────────────────
@@ -177,15 +162,20 @@ async def setupgroup_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  ENTRY LINK HANDLER  — /start join_<slug>
+#  ENTRY LINK HANDLER  — /start join_<slug>  and  /start verify_<uid>_<cid>
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def _start_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Unified /start deep-link handler.
-      join_<slug> — user coming from portal channel verify button.
-                    Opens a Telegram Mini App for hCaptcha verification.
-                    The invite link is sent after via handle_webapp_data().
+      join_<slug>          — user coming from portal channel verify button.
+                              Opens a Telegram Mini App for hCaptcha verification.
+                              The invite link is sent after via handle_webapp_data().
+      verify_<uid>_<cid>   — user coming from the in-group "🔐 Click here to
+                              verify" notice (no portal channel). Shows a DM
+                              button that unmutes them directly on success
+                              (verify_callback in wel.py); the cron sweep
+                              kicks them if they never confirm in time.
     """
     user = update.effective_user
     chat = update.effective_chat
@@ -246,6 +236,52 @@ async def _start_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await queue_message_deletion(user.id, sent_verification_msg.message_id, 60)
         return
 
+    # ── CASE 2: direct-group verification (no portal channel) ─────────────────
+    # Triggered by the "🔐 Click here to verify" button that welcome_new_member()
+    # (in wel.py) posts in the group when a new member joins a group with no
+    # portal channel linked. Restrict → this DM button → verify_callback()
+    # unrestricts on tap; get_due_kicks() (cron sweep) kicks on timeout.
+    if start_arg.startswith("verify_"):
+        parts = start_arg.split("_")
+        if len(parts) != 3:
+            await msg.reply_text("⚠️ Invalid verification link.")
+            return
+        try:
+            target_user_id = int(parts[1])
+            target_chat_id = int(parts[2])
+        except ValueError:
+            await msg.reply_text("⚠️ Invalid verification link.")
+            return
+
+        if user.id != target_user_id:
+            await msg.reply_text("⚠️ This verification link is not for your account.")
+            return
+
+        pending_verification = await get_verification(user.id)
+        if pending_verification is None:
+            if await is_verified(user.id, target_chat_id):
+                await msg.reply_text("✅ You're already verified! Go back to the group and start chatting.")
+            else:
+                await msg.reply_text(
+                    "⚠️ Your verification session has expired. Please rejoin the group to get a new link."
+                )
+            return
+
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton(
+                "✅ I'm not a bot — verify me!",
+                callback_data=f"doverify:{user.id}:{target_chat_id}",
+            )
+        ]])
+        dm = await msg.reply_text(
+            "👋 *One last step!*\n\n"
+            "Press the button below to confirm you're a real person and unlock the group.",
+            parse_mode="Markdown",
+            reply_markup=keyboard,
+        )
+        await set_verification_dm_msg(user.id, dm.message_id)
+        return
+
     # ── Unrecognised argument ─────────────────────────────────────────────────
     await msg.reply_text(f"👋 Hello {user.first_name}! Use an official group link to get started.")
 
@@ -254,6 +290,12 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """
     Fires when the Telegram Mini App calls tg.sendData() after successful verification.
     Receives the verified uid + cid, then sends the single-use invite link.
+
+    NOTE: currently unused by index.html (which uses tg.close() + a server-side
+    send from api/verify.py instead, since sendData() only works for Mini Apps
+    launched via a Reply Keyboard button, not the Inline Keyboard button used
+    here). Left in place / still wired to the WEB_APP_DATA filter in case a
+    future flow uses a Reply Keyboard launch.
     """
     msg = update.message
     user = update.effective_user
@@ -344,5 +386,3 @@ async def _generate_invite_link(bot, chat_id: int) -> str:
         # expire_date is intentionally omitted so it never rots instantly
     )
     return link.invite_link
-
-
