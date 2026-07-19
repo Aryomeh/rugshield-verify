@@ -317,8 +317,12 @@
         }
 
         // ── SUCCESS ───────────────────────────────────────────────────────────
-        if (window.telegramAnalytics) {
-          window.telegramAnalytics.track('verification_success');
+        try {
+          if (window.telegramAnalytics && typeof window.telegramAnalytics.track === 'function') {
+            window.telegramAnalytics.track('verification_success');
+          }
+        } catch (analyticsErr) {
+          console.warn('Analytics tracking failed (non-fatal):', analyticsErr);
         }
 
         setStatus('success', '🎉 Verified! Sending you the invite link…');
