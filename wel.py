@@ -1387,6 +1387,27 @@ async def anti_fud(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 #  ANTI-FORWARD
 # ══════════════════════════════════════════════════════════════════════════════
 
+async def delete_service_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Silently deletes Telegram's own service messages — "X added Y",
+    "X removed Y", "Z joined the group via invite link", title/photo
+    changes, pin notices, etc. — so the chat stays clean. Requires the
+    bot to be an admin with delete-messages rights in the group."""
+    msg = update.message
+    if not msg or not update.effective_chat:
+        return
+
+    if update.effective_chat.type == "private":
+        return
+
+    try:
+        await context.bot.delete_message(
+            chat_id=msg.chat_id,
+            message_id=msg.message_id,
+        )
+    except Exception as e:
+        logger.warning(f"Could not delete service message: {e}")
+
+
 async def anti_forward(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     msg = update.message
     if not msg or not update.effective_chat:
@@ -1758,6 +1779,15 @@ def build_application() -> Application:
         filters.StatusUpdate.CHAT_SHARED & filters.ChatType.PRIVATE,
         handle_portal_channel_selection,
     ))
+
+    # Auto-delete Telegram's own service messages in groups: member
+    # added/removed, joined via invite link, title/photo change, pin
+    # notices, etc. Runs in its own group so it doesn't block other
+    # group handlers, and won't touch anything in private chats.
+    app.add_handler(MessageHandler(
+        filters.StatusUpdate.ALL & ~filters.ChatType.PRIVATE,
+        delete_service_message,
+    ), group=0)
 
     # Group moderation (anti-forward runs first on all group messages)
     app.add_handler(MessageHandler(
