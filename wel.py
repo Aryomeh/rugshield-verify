@@ -36,6 +36,9 @@ from db import (
     # fud
     add_fud_violation, reset_violations,
     get_fud_words, add_fud_word, remove_fud_word,
+    # forward moderation
+    get_forward_settings, set_forward_moderation, set_forward_action,
+    add_forward_violation, reset_forward_violations,
     # groups
     register_group, remove_group, get_groups,
     # welcome settings (new)
@@ -210,6 +213,16 @@ async def _panel_keyboard(chat_id: int) -> InlineKeyboardMarkup:
     media_label = "🖼 Set Welcome Image/GIF" if not (ws and ws.get("media_file_id")) else "🔄 Change Welcome Image/GIF"
     buy_gif_label = "🎬 Set Buy Alert GIF" if not (ws and ws.get("buy_gif_file_id")) else "🔄 Change Buy Alert GIF"
 
+    fwd = await get_forward_settings(chat_id)
+    forward_toggle_btn = InlineKeyboardButton(
+        "🚫 Forward Mod: ON" if fwd["enabled"] else "✅ Forward Mod: OFF",
+        callback_data=f"p|toggleforward|{chat_id}",
+    )
+    forward_action_btn = InlineKeyboardButton(
+        f"⚖️ Action: {'Warn (3-strike)' if fwd['action'] == 'warn' else 'Instant Kick'}",
+        callback_data=f"p|toggleforwardaction|{chat_id}",
+    )
+
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"📋 CA: {ca_short}", callback_data=f"p|viewca|{chat_id}")],
         [InlineKeyboardButton("✏️ Set CA",            callback_data=f"p|setca|{chat_id}"),
@@ -219,6 +232,7 @@ async def _panel_keyboard(chat_id: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton("➖ Remove FUD word", callback_data=f"p|removefud|{chat_id}")],
         [InlineKeyboardButton("📝 List FUD words",    callback_data=f"p|listfud|{chat_id}")],
         [InlineKeyboardButton("🔄 Reset user strikes", callback_data=f"p|resetstrikes|{chat_id}")],
+        [forward_toggle_btn, forward_action_btn],
         # ── Welcome message controls ──────────────────────────────────────────
         [InlineKeyboardButton("💬 Add Welcome Message", callback_data=f"p|addwelcome|{chat_id}")],
         [InlineKeyboardButton(media_label,              callback_data=f"p|setwelcomemedia|{chat_id}"),
@@ -561,6 +575,23 @@ async def panel_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await query.edit_message_text(
             "🔄 *Reset User Strikes*\n\nSend the user's *Telegram ID*:",
             parse_mode="Markdown",
+        )
+
+    elif action == "toggleforward":
+        fwd = await get_forward_settings(chat_id)
+        await set_forward_moderation(chat_id, not fwd["enabled"])
+        await query.edit_message_text(
+            "⚙️ *Admin Panel*", parse_mode="Markdown",
+            reply_markup=await _panel_keyboard(chat_id),
+        )
+
+    elif action == "toggleforwardaction":
+        fwd = await get_forward_settings(chat_id)
+        new_action = "warn" if fwd["action"] == "kick" else "kick"
+        await set_forward_action(chat_id, new_action)
+        await query.edit_message_text(
+            "⚙️ *Admin Panel*", parse_mode="Markdown",
+            reply_markup=await _panel_keyboard(chat_id),
         )
 
     # ── Add welcome message (text) ────────────────────────────────────────────
@@ -992,6 +1023,13 @@ async def _restrict_user(bot, chat_id: int, user_id: int) -> None:
             can_change_info=False, can_invite_users=False, can_pin_messages=False,
         ),
     )
+
+
+async def _kick_user(bot, chat_id: int, user_id: int) -> None:
+    """Removes the user from the group without a permanent ban — they can
+    rejoin later via invite link, unlike ban_chat_member alone."""
+    await bot.ban_chat_member(chat_id=chat_id, user_id=user_id)
+    await bot.unban_chat_member(chat_id=chat_id, user_id=user_id, only_if_banned=True)
 
 
 async def _unrestrict_user(bot, chat_id: int, user_id: int) -> None:
@@ -1442,43 +1480,58 @@ async def anti_forward(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
     if is_forwarded:
-        mention = f"@{user.username}" if user.username else user.first_name
+        fwd_settings = await get_forward_settings(chat_id)
+        if not fwd_settings["enabled"]:
+            # Forward moderation turned off for this group — let it through,
+            # rest of anti_forward() (link/CA checks) still runs below.
+            pass
+        else:
+            mention = f"@{user.username}" if user.username else user.first_name
 
-        try:
-            await context.bot.delete_message(
+            try:
+                await context.bot.delete_message(
+                    chat_id=chat_id,
+                    message_id=msg.message_id
+                )
+            except Exception as e:
+                logger.warning(f"Could not delete forwarded message: {e}")
+
+            if fwd_settings["action"] == "kick":
+                try:
+                    await _kick_user(context.bot, chat_id, user.id)
+                    notice = (
+                        f"🚫 {mention} was *kicked* for sending a forwarded message.\n"
+                        "_Forwarding is not allowed in this group._"
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not kick user {user.id}: {e}")
+                    notice = f"⚠️ {mention}'s forwarded message was deleted."
+            else:  # "warn" — 3-strike system, same pattern as anti-FUD
+                violations = await add_forward_violation(user.id, chat_id)
+                if violations >= MUTE_AFTER_VIOLATIONS:
+                    try:
+                        await _kick_user(context.bot, chat_id, user.id)
+                        await reset_forward_violations(user.id, chat_id)
+                        notice = (
+                            f"🚫 {mention} was *kicked* for repeated forwarding.\n"
+                            f"_Strike {violations}/{MUTE_AFTER_VIOLATIONS}_"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not kick user {user.id}: {e}")
+                        notice = f"⚠️ {mention}, forwarding not allowed! Strike {violations}/{MUTE_AFTER_VIOLATIONS}"
+                else:
+                    notice = (
+                        f"⚠️ {mention}, forwarding is not allowed here!\n"
+                        f"Strike *{violations}/{MUTE_AFTER_VIOLATIONS}*"
+                    )
+
+            notice_msg = await context.bot.send_message(
                 chat_id=chat_id,
-                message_id=msg.message_id
+                text=notice,
+                parse_mode="Markdown"
             )
-        except Exception as e:
-            logger.warning(f"Could not delete forwarded message: {e}")
-
-        try:
-            await context.bot.ban_chat_member(
-                chat_id=chat_id,
-                user_id=user.id
-            )
-
-            notice = (
-                f"🚫 {mention} has been *banned* for sending a forwarded message.\n"
-                "_Forwarding is not allowed in this group._"
-            )
-        except Exception as e:
-            logger.warning(f"Could not ban user {user.id}: {e}")
-            notice = f"⚠️ {mention}'s forwarded message was deleted."
-
-        notice_msg = await context.bot.send_message(
-            chat_id=chat_id,
-            text=notice,
-            parse_mode="Markdown"
-        )
-
-        await auto_delete(
-                context,
-                chat_id,
-                notice_msg.message_id,
-                delay=15
-            )
-        return
+            await auto_delete(context, chat_id, notice_msg.message_id, delay=15)
+            return
 
     # ==========================================================
     # LINK MODERATION

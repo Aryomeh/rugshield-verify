@@ -602,6 +602,80 @@ async def reset_violations(user_id: int, chat_id: int) -> None:
         )
 
 
+# ════════════════════════════════════════════════════════════════════════════
+#  FORWARD-MESSAGE MODERATION SETTINGS
+# ════════════════════════════════════════════════════════════════════════════
+
+async def get_forward_settings(chat_id: int) -> dict:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT forward_delete_enabled, forward_action FROM welcome_settings WHERE chat_id=$1",
+            chat_id,
+        )
+    if not row:
+        return {"enabled": True, "action": "kick"}
+    return {
+        "enabled": row["forward_delete_enabled"] if row["forward_delete_enabled"] is not None else True,
+        "action": row["forward_action"] or "kick",
+    }
+
+
+async def set_forward_moderation(chat_id: int, enabled: bool) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO welcome_settings (chat_id, forward_delete_enabled)
+            VALUES ($1, $2)
+            ON CONFLICT (chat_id) DO UPDATE SET forward_delete_enabled = excluded.forward_delete_enabled
+            """,
+            chat_id, enabled,
+        )
+
+
+async def set_forward_action(chat_id: int, action: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO welcome_settings (chat_id, forward_action)
+            VALUES ($1, $2)
+            ON CONFLICT (chat_id) DO UPDATE SET forward_action = excluded.forward_action
+            """,
+            chat_id, action,
+        )
+
+
+async def add_forward_violation(user_id: int, chat_id: int) -> int:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                """
+                INSERT INTO forward_violations (user_id, chat_id, count, last_at)
+                VALUES ($1, $2, 1, $3)
+                ON CONFLICT (user_id, chat_id) DO UPDATE
+                SET count = forward_violations.count + 1, last_at = excluded.last_at
+                """,
+                user_id, chat_id, _utcnow(),
+            )
+            row = await conn.fetchrow(
+                "SELECT count FROM forward_violations WHERE user_id=$1 AND chat_id=$2",
+                user_id, chat_id,
+            )
+    return row["count"]
+
+
+async def reset_forward_violations(user_id: int, chat_id: int) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE forward_violations SET count=0 WHERE user_id=$1 AND chat_id=$2",
+            user_id, chat_id,
+        )
+
+
 # ══════════════════════════════════════════════════════════════════════════
 #  AUTO REPLIES
 # ══════════════════════════════════════════════════════════════════════════
